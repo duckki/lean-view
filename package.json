@@ -1,0 +1,42 @@
+{
+  "name": "lean-view",
+  "version": "0.1.0",
+  "description": "Static declaration browser for Lean projects using doc-gen4 data.",
+  "type": "module",
+  "bin": {
+    "lean-view": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/cli-options.js",
+    "dist/extract.js",
+    "dist/server.js",
+    "dist/site.js",
+    "static",
+    "examples",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build --silent && node --test dist/*.test.js",
+    "prepack": "npm run test --silent"
+  },
+  "keywords": [
+    "lean",
+    "lean4",
+    "doc-gen4",
+    "documentation",
+    "browser"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}
