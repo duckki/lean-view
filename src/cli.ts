@@ -47,9 +47,11 @@ export async function main(args = argv.slice(2)): Promise<number> {
       repoRoot: options.repoRoot,
       docBuildDir: options.docBuildDir,
       packageName: options.packageName,
+      projectName: options.projectName,
       localRoot: options.localRoot,
       dbPath: options.docGenPath,
       outDir: options.docGenOutputDir,
+      log: (message) => stdout.write(`${message}\n`),
     });
   }
 

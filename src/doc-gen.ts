@@ -20,9 +20,11 @@ export interface RunDocGenOptions {
   repoRoot: string;
   docBuildDir: string;
   packageName: string;
+  projectName?: string;
   localRoot: string;
   dbPath: string;
   outDir: string;
+  log?: (message: string) => void;
   runner?: DocGenRunner;
 }
 
@@ -173,6 +175,14 @@ function defaultRunner(command: DocGenCommand): DocGenRunResult {
   });
 }
 
+function progressMessage(command: DocGenCommand, docGenAnnounced: boolean, projectName: string): string | null {
+  if (command.command !== "lake") return null;
+  if (command.args.length === 1 && command.args[0] === "build") return `Building ${projectName}`;
+  if (command.args[0] === "build" && command.args[1] === "doc-gen4") return "Building doc-gen4";
+  if (!docGenAnnounced && command.args[0] === "env" && command.args[1] === "doc-gen4") return "Running doc-gen";
+  return null;
+}
+
 export function runDocGen(options: RunDocGenOptions): void {
   const modules = discoverLeanModules(options.repoRoot, options.localRoot);
   if (modules.length === 0) {
@@ -188,6 +198,8 @@ export function runDocGen(options: RunDocGenOptions): void {
   });
   rmSync(options.dbPath, { force: true });
   const runner = options.runner || defaultRunner;
+  const projectName = options.projectName || options.packageName;
+  let docGenAnnounced = false;
   for (const command of docGenCommands({
     repoRoot: options.repoRoot,
     docBuildDir: options.docBuildDir,
@@ -196,6 +208,10 @@ export function runDocGen(options: RunDocGenOptions): void {
     localRoot: options.localRoot,
     modules,
   })) {
+    const message = progressMessage(command, docGenAnnounced, projectName);
+    if (message != null) options.log?.(message);
+    if (command.args[0] === "env" && command.args[1] === "doc-gen4") docGenAnnounced = true;
+
     const result = runner(command);
     if (result.error) throw result.error;
     if (result.status !== 0) {

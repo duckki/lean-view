@@ -38,20 +38,20 @@ function writeModule(repoRoot: string, moduleName: string, lines: string[]): voi
 }
 
 test("formats module names and source locations", () => {
-  assert.equal(moduleNameToRelativePath("GraphQL.DataModel.Store"), "GraphQL/DataModel/Store.lean");
-  assert.equal(shortName("GraphQL.DataModel.FieldAccess.eqBool"), "eqBool");
-  assert.equal(namespaceName("GraphQL.DataModel.FieldAccess.eqBool"), "GraphQL.DataModel.FieldAccess");
-  assert.equal(displayGroup("GraphQL.NormalForm.GroundTypeNormalization.Semantics"), "proof");
+  assert.equal(moduleNameToRelativePath("MockProject.DataModel.Store"), "MockProject/DataModel/Store.lean");
+  assert.equal(shortName("MockProject.DataModel.FieldAccess.eqBool"), "eqBool");
+  assert.equal(namespaceName("MockProject.DataModel.FieldAccess.eqBool"), "MockProject.DataModel.FieldAccess");
+  assert.equal(displayGroup("MockProject.NormalForm.GroundTypeNormalization.Semantics"), "proof");
   assert.equal(
-    formatSourceLocation({ sourcePath: "GraphQL/DataModel.lean", line: 22 }),
-    "GraphQL/DataModel.lean:22",
+    formatSourceLocation({ sourcePath: "MockProject/DataModel.lean", line: 22 }),
+    "MockProject/DataModel.lean:22",
   );
 });
 
 test("finds current source declaration and ignores generated projections", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Example", [
-      "namespace GraphQL",
+    writeModule(repoRoot, "MockProject.Example", [
+      "namespace MockProject",
       "-- First definition.",
       "def first : Nat :=",
       "  1 +",
@@ -62,14 +62,14 @@ test("finds current source declaration and ignores generated projections", () =>
       "deriving Repr",
     ]);
 
-    const match = findDeclarationSource(repoRoot, "GraphQL.Example", "GraphQL.first", "definition");
+    const match = findDeclarationSource(repoRoot, "MockProject.Example", "MockProject.first", "definition");
 
     assert.ok(match);
     if (!match) throw new Error("expected declaration source match");
     assert.equal(match.startLine, 3);
     assert.equal(match.source, "def first : Nat :=\n  1 +\n  2");
     assert.equal(
-      findDeclarationSource(repoRoot, "GraphQL.Example", "GraphQL.Box.value", "definition"),
+      findDeclarationSource(repoRoot, "MockProject.Example", "MockProject.Box.value", "definition"),
       null,
     );
   });
@@ -77,8 +77,8 @@ test("finds current source declaration and ignores generated projections", () =>
 
 test("matches declarations with dotted local names", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Schema", [
-      "namespace GraphQL.Schema",
+    writeModule(repoRoot, "MockProject.Schema", [
+      "namespace MockProject.Schema",
       "",
       "structure ObjectType where",
       "  fields : List String",
@@ -86,13 +86,13 @@ test("matches declarations with dotted local names", () => {
       "def ObjectType.isEmpty (objectType : ObjectType) : Bool :=",
       "  objectType.fields.isEmpty",
       "",
-      "end GraphQL.Schema",
+      "end MockProject.Schema",
     ]);
 
     const match = findDeclarationSource(
       repoRoot,
-      "GraphQL.Schema",
-      "GraphQL.Schema.ObjectType.isEmpty",
+      "MockProject.Schema",
+      "MockProject.Schema.ObjectType.isEmpty",
       "definition",
     );
 
@@ -107,8 +107,8 @@ test("matches declarations with dotted local names", () => {
 
 test("stops declaration source before the next declaration docstring", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Schema", [
-      "namespace GraphQL.Schema",
+    writeModule(repoRoot, "MockProject.Schema", [
+      "namespace MockProject.Schema",
       "",
       "/-- A field on an object. -/",
       "structure Field where",
@@ -120,10 +120,10 @@ test("stops declaration source before the next declaration docstring", () => {
       "  fields : List Field",
       "  deriving Repr",
       "",
-      "end GraphQL.Schema",
+      "end MockProject.Schema",
     ]);
 
-    const match = findDeclarationSource(repoRoot, "GraphQL.Schema", "GraphQL.Schema.Field", "structure");
+    const match = findDeclarationSource(repoRoot, "MockProject.Schema", "MockProject.Schema.Field", "structure");
 
     assert.ok(match);
     if (!match) throw new Error("expected declaration source match");
@@ -133,8 +133,8 @@ test("stops declaration source before the next declaration docstring", () => {
 
 test("stops declaration source before private theorem siblings", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Example", [
-      "namespace GraphQL.Example",
+    writeModule(repoRoot, "MockProject.Example", [
+      "namespace MockProject.Example",
       "",
       "def visible : Nat :=",
       "  1",
@@ -145,19 +145,19 @@ test("stops declaration source before private theorem siblings", () => {
       "def after : Nat :=",
       "  2",
       "",
-      "end GraphQL.Example",
+      "end MockProject.Example",
     ]);
 
     const visible = findDeclarationSource(
       repoRoot,
-      "GraphQL.Example",
-      "GraphQL.Example.visible",
+      "MockProject.Example",
+      "MockProject.Example.visible",
       "definition",
     );
     const helper = findDeclarationSource(
       repoRoot,
-      "GraphQL.Example",
-      "GraphQL.Example.helper",
+      "MockProject.Example",
+      "MockProject.Example.helper",
       "theorem",
     );
 
@@ -171,8 +171,8 @@ test("stops declaration source before private theorem siblings", () => {
 
 test("stops declaration source before a following namespace block", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Example", [
-      "namespace GraphQL.Example",
+    writeModule(repoRoot, "MockProject.Example", [
+      "namespace MockProject.Example",
       "",
       "def beforeNamespace : Nat :=",
       "  1",
@@ -186,13 +186,13 @@ test("stops declaration source before a following namespace block", () => {
       "  2",
       "end Helpers",
       "",
-      "end GraphQL.Example",
+      "end MockProject.Example",
     ]);
 
     const match = findDeclarationSource(
       repoRoot,
-      "GraphQL.Example",
-      "GraphQL.Example.beforeNamespace",
+      "MockProject.Example",
+      "MockProject.Example.beforeNamespace",
       "definition",
     );
 
@@ -204,8 +204,8 @@ test("stops declaration source before a following namespace block", () => {
 
 test("cuts definition source before termination_by", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Example", [
-      "namespace GraphQL.Example",
+    writeModule(repoRoot, "MockProject.Example", [
+      "namespace MockProject.Example",
       "",
       "def recursive : Nat -> Nat",
       "  | 0 => 0",
@@ -215,13 +215,13 @@ test("cuts definition source before termination_by", () => {
       "def after : Nat :=",
       "  2",
       "",
-      "end GraphQL.Example",
+      "end MockProject.Example",
     ]);
 
     const match = findDeclarationSource(
       repoRoot,
-      "GraphQL.Example",
-      "GraphQL.Example.recursive",
+      "MockProject.Example",
+      "MockProject.Example.recursive",
       "definition",
     );
 
@@ -233,12 +233,12 @@ test("cuts definition source before termination_by", () => {
 
 test("extracts module docs, declaration docstrings, and line comments from source", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Example", [
+    writeModule(repoRoot, "MockProject.Example", [
       "/-! Module overview.",
       "",
       "More module detail.",
       "-/",
-      "namespace GraphQL",
+      "namespace MockProject",
       "",
       "/-! Namespace docs are ignored by this browser. -/",
       "",
@@ -254,26 +254,26 @@ test("extracts module docs, declaration docstrings, and line comments from sourc
       "def sample : Nat := 1",
     ]);
 
-    assert.deepEqual(readSourceDocs(repoRoot, "GraphQL.Example"), {
+    assert.deepEqual(readSourceDocs(repoRoot, "MockProject.Example"), {
       moduleDocMarkdown: "Module overview.\n\nMore module detail.",
     });
     assert.equal(
-      readSourceDocstring(repoRoot, "GraphQL.Example", 14),
+      readSourceDocstring(repoRoot, "MockProject.Example", 14),
       "Declaration overview.\n\n- First point.",
     );
-    assert.equal(readLeadingLineComment(repoRoot, "GraphQL.Example", 18), "Ordinary line comment.");
+    assert.equal(readLeadingLineComment(repoRoot, "MockProject.Example", 18), "Ordinary line comment.");
   });
 });
 
 test("extracts doc and plain comments around sibling and nested namespaces", () => {
   withTempRepo((repoRoot) => {
-    writeModule(repoRoot, "GraphQL.Schema", [
+    writeModule(repoRoot, "MockProject.Schema", [
       "/-! Module overview. -/",
       "",
       "-- Plain comment before schema namespace.",
       "-- Second plain line.",
       "/-- Doc comment before schema namespace. -/",
-      "namespace GraphQL.Schema",
+      "namespace MockProject.Schema",
       "-- Plain comment after schema namespace.",
       "/--",
       "Doc comment after schema namespace.",
@@ -295,61 +295,61 @@ test("extracts doc and plain comments around sibling and nested namespaces", () 
       "def label : String := \"field\"",
       "end Rendering",
       "",
-      "end GraphQL.Schema",
+      "end MockProject.Schema",
     ]);
 
-    assert.deepEqual(readNamespaceDocs(repoRoot, "GraphQL.Schema"), [
+    assert.deepEqual(readNamespaceDocs(repoRoot, "MockProject.Schema"), [
       {
-        namespace: "GraphQL.Schema",
+        namespace: "MockProject.Schema",
         line: 6,
         placement: "before",
         kind: "comment",
         text: "Plain comment before schema namespace.\nSecond plain line.",
       },
       {
-        namespace: "GraphQL.Schema",
+        namespace: "MockProject.Schema",
         line: 6,
         placement: "before",
         kind: "doc",
         text: "Doc comment before schema namespace.",
       },
       {
-        namespace: "GraphQL.Schema",
+        namespace: "MockProject.Schema",
         line: 6,
         placement: "after",
         kind: "comment",
         text: "Plain comment after schema namespace.",
       },
       {
-        namespace: "GraphQL.Schema",
+        namespace: "MockProject.Schema",
         line: 6,
         placement: "after",
         kind: "doc",
         text: "Doc comment after schema namespace.\nSecond doc line.",
       },
       {
-        namespace: "GraphQL.Schema.Validation",
+        namespace: "MockProject.Schema.Validation",
         line: 17,
         placement: "before",
         kind: "comment",
         text: "Plain comment before nested namespace.",
       },
       {
-        namespace: "GraphQL.Schema.Validation",
+        namespace: "MockProject.Schema.Validation",
         line: 17,
         placement: "after",
         kind: "doc",
         text: "Nested namespace doc after the declaration line.",
       },
       {
-        namespace: "GraphQL.Schema.Rendering",
+        namespace: "MockProject.Schema.Rendering",
         line: 23,
         placement: "before",
         kind: "doc",
         text: "Sibling namespace doc before the declaration line.",
       },
       {
-        namespace: "GraphQL.Schema.Rendering",
+        namespace: "MockProject.Schema.Rendering",
         line: 23,
         placement: "after",
         kind: "comment",
@@ -361,50 +361,50 @@ test("extracts doc and plain comments around sibling and nested namespaces", () 
 
 test("finds theorem statements related to a declaration", () => {
   const current = {
-    name: "GraphQL.DataModel.FieldAccess",
+    name: "MockProject.DataModel.FieldAccess",
     shortName: "FieldAccess",
-    module: "GraphQL.DataModel",
+    module: "MockProject.DataModel",
   };
   const groups = relatedGroups(current, [
     {
-      name: "GraphQL.DataModel.fieldAccess_helper",
+      name: "MockProject.DataModel.fieldAccess_helper",
       kind: "theorem",
-      module: "GraphQL.DataModel",
+      module: "MockProject.DataModel",
       signatureText: "FieldAccess -> Prop",
     },
     {
-      name: "GraphQL.DataModel.Store.external_helper",
+      name: "MockProject.DataModel.Store.external_helper",
       kind: "theorem",
-      module: "GraphQL.DataModel.Store",
-      signatureText: "GraphQL.DataModel.FieldAccess -> Prop",
+      module: "MockProject.DataModel.Store",
+      signatureText: "MockProject.DataModel.FieldAccess -> Prop",
     },
     {
-      name: "GraphQL.DataModel.other_helper",
+      name: "MockProject.DataModel.other_helper",
       kind: "theorem",
-      module: "GraphQL.DataModel",
-      signatureText: "GraphQL.DataModel.ObjectPath -> Prop",
+      module: "MockProject.DataModel",
+      signatureText: "MockProject.DataModel.ObjectPath -> Prop",
     },
   ]);
 
   assert.equal(groups[0].count, 1);
   assert.equal(groups[0].allModulesCount, 2);
-  assert.deepEqual(groups[0].declarations, ["GraphQL.DataModel.fieldAccess_helper"]);
+  assert.deepEqual(groups[0].declarations, ["MockProject.DataModel.fieldAccess_helper"]);
 });
 
 test("builds local module import graph", () => {
   const graph = buildModuleGraph(
     [
-      { name: "GraphQL", sourcePath: "GraphQL.lean" },
-      { name: "GraphQL.DataModel", sourcePath: "GraphQL/DataModel.lean" },
+      { name: "MockProject", sourcePath: "MockProject.lean" },
+      { name: "MockProject.DataModel", sourcePath: "MockProject/DataModel.lean" },
     ],
     [
-      ["GraphQL", "GraphQL.DataModel"],
-      ["GraphQL", "Init"],
+      ["MockProject", "MockProject.DataModel"],
+      ["MockProject", "Init"],
     ],
   );
 
-  assert.deepEqual(graph.edges, [{ from: "GraphQL", to: "GraphQL.DataModel" }]);
-  assert.deepEqual(graph.nodes.find((node) => node.id === "GraphQL.DataModel")?.importedBy, ["GraphQL"]);
+  assert.deepEqual(graph.edges, [{ from: "MockProject", to: "MockProject.DataModel" }]);
+  assert.deepEqual(graph.nodes.find((node) => node.id === "MockProject.DataModel")?.importedBy, ["MockProject"]);
 });
 
 test("turns markdown into search text", () => {

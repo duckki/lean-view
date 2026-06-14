@@ -1,21 +1,23 @@
-name: Publish to npm
+name: Release package
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -24,13 +26,47 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
+      - name: Read package version
+        id: package
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').name")"
+          TAG="v${VERSION}"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Check release state
+        id: state
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.package.outputs.tag }}" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "npm_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
+        if: steps.state.outputs.npm_exists == 'false'
         run: npm install
 
       - name: Run tests
+        if: steps.state.outputs.npm_exists == 'false'
         run: npm test
 
       - name: Publish package
+        if: steps.state.outputs.npm_exists == 'false'
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.state.outputs.tag_exists == 'false'
+        run: gh release create "${{ steps.package.outputs.tag }}" --title "${{ steps.package.outputs.tag }}" --notes "Release ${{ steps.package.outputs.tag }}" --target "$GITHUB_SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}

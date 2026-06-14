@@ -127,7 +127,7 @@ namespace comments render in monospace.
 
 ## Mock Fixture
 
-The repository no longer depends on a private `tests/graphql-lean` submodule.
+The repository no longer depends on a private Lean project submodule.
 `examples/mock-lean/` contains a sizable synthetic Lean source tree with many
 files, imports, sibling and nested namespaces, namespace comments, variable
 length doc strings, structures, inductives, definitions, and theorems.

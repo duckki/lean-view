@@ -1,6 +1,6 @@
 {
   "name": "lean-view",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Static declaration browser for Lean projects using doc-gen4 data.",
   "type": "module",
   "repository": {

@@ -940,10 +940,7 @@ fetch(DATA_URL)
     document.title = `${data.project.name} - Lean View`;
     initializeCollapsedFolders();
     if (!window.location.hash) {
-      const preferred = data.declarations["GraphQL.DataModel.FieldAccess"]
-        ? "GraphQL.DataModel.FieldAccess"
-        : data.declarationOrder[0];
-      window.location.hash = routeHash("decl", preferred);
+      window.location.hash = routeHash("module", data.moduleOrder[0]);
       return;
     }
     render();

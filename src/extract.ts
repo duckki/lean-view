@@ -5,7 +5,7 @@ import { argv, cwd, exit, stderr } from "node:process";
 
 import { resolveDocGenDb } from "./cli-options.js";
 
-const DEFAULT_LOCAL_ROOT = "GraphQL";
+const DEFAULT_LOCAL_ROOT = "Main";
 const DEFAULT_PROJECT_NAME = "Lean Project";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };

@@ -50,6 +50,8 @@ test("app shell title, branding, and initial folder state are configured", () =>
   assert.equal(appJs.includes('<span class="brand-project">${escapeHtml(data.project.name)}</span>'), true);
   assert.equal(appJs.includes('<span class="brand-suffix">declarations</span>'), true);
   assert.equal(appJs.includes("initializeCollapsedFolders();"), true);
+  assert.equal(appJs.includes('window.location.hash = routeHash("module", data.moduleOrder[0]);'), true);
+  assert.equal(appJs.includes("DataModel.FieldAccess"), false);
   assert.equal(appJs.includes("if (depth > 0) collapsedFolders.add(folder.key);"), true);
   assert.equal(brandTitleRule.includes("font-weight: 400;"), true);
   assert.equal(brandProjectRule.includes("font-family: inherit;"), true);

@@ -38,8 +38,8 @@ Common options:
 - `--doc-gen <path>`: existing doc-gen output directory, database directory,
   docbuild directory, or path to `api-docs.db`. When omitted, `lean-view` runs
   project-only doc-gen generation under `.lean-view/doc-gen`.
-- `--local-root <module>`: local module namespace to include, such as `GraphQL`
-  or `MyProject`. If a Lake file can be parsed, the first `lean_lib` name is
+- `--local-root <module>`: local module namespace to include, such as
+  `MyProject`. If a Lake file can be parsed, the first `lean_lib` name is
   used. If no `lean_lib` is found, this option is used as a fallback, then the
   Lake directory name, then the current directory name.
 - `--repo-root <path>`: project root used to read `.lean` source files. Defaults
@@ -96,10 +96,12 @@ out to `sqlite3 -json` so it can stay small and easy to run through `npx`.
 
 ## Publishing
 
-Publishing is handled by `.github/workflows/publish-npm.yml` when a GitHub
-Release is published, or when the workflow is run manually from GitHub Actions.
+Publishing is handled by `.github/workflows/publish-npm.yml` on pushes to
+`main`, with `package.json` as the source of truth for the release version.
 Add an npm automation token as the repository secret `NPM_TOKEN` before running
 the workflow.
 
-The workflow installs dependencies, runs the test suite, and publishes with npm
-provenance enabled.
+To release a new version, update `package.json`, commit, and push to `main`.
+The workflow reads the version, skips if npm already has that version, otherwise
+runs the test suite, publishes with npm provenance enabled, and creates the
+matching GitHub Release tag such as `v0.1.1`.

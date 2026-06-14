@@ -143,14 +143,17 @@ test("runs doc-gen commands with a generated output directory", () => {
     const docBuildDir = join(root, ".lean-view", "docbuild");
     const dbPath = join(outDir, "api-docs.db");
     const commands: string[] = [];
+    const logs: string[] = [];
 
     runDocGen({
       repoRoot: root,
       docBuildDir,
       packageName: "mock-project",
+      projectName: "Mock Project",
       localRoot: "MockProject",
       dbPath,
       outDir,
+      log: (message) => logs.push(message),
       runner: (command) => {
         commands.push(`${command.command} ${command.args.join(" ")}`);
         return { status: 0, stderr: "" };
@@ -167,5 +170,6 @@ test("runs doc-gen commands with a generated output directory", () => {
       `lake env doc-gen4 single --build ${outDir} MockProject.Core api-docs.db vscode://file/${join(root, "MockProject", "Core.lean")}`,
       `lake env doc-gen4 fromDb --build ${outDir} ${dbPath} MockProject`,
     ]);
+    assert.deepEqual(logs, ["Building Mock Project", "Building doc-gen4", "Running doc-gen"]);
   });
 });
