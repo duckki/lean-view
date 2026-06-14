@@ -61,5 +61,6 @@ readers can distinguish API prose from local source notes.
 ## Non-goals
 
 Lean View does not render proof states, elaborate Lean code, execute tactics, or
-replace VS Code. It also does not generate the doc-gen4 database itself yet.
-Those pieces can be added later around the same static frontend contract.
+replace VS Code. It can generate a project-only doc-gen4 database as a setup
+step, but the browser UI remains a static reader over generated data rather than
+an interactive Lean environment.

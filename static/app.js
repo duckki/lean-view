@@ -1,6 +1,6 @@
 "use strict";
 
-const DATA_URL = "data/index.json?v=20260612-source-docstrings";
+const DATA_URL = "data/index.json?v=20260613-brand-title";
 const app = document.getElementById("app");
 
 let data = null;
@@ -14,6 +14,7 @@ let state = {
 };
 
 const collapsedFolders = new Set();
+let collapsedFoldersInitialized = false;
 const BASIC_DEFINITION_KINDS = new Set(["definition", "inductive", "structure", "class"]);
 const LEAN_KEYWORDS = new Set([
   "abbrev",
@@ -245,7 +246,10 @@ function topbar() {
   return `
     <header class="topbar">
       <div class="brand">
-        <div class="brand-title">${escapeHtml(data.project.name)} declarations</div>
+        <div class="brand-title">
+          <span class="brand-project">${escapeHtml(data.project.name)}</span>
+          <span class="brand-suffix">declarations</span>
+        </div>
         <div class="brand-meta">${moduleCount} files · ${declarationCount} declarations</div>
       </div>
       <form class="global-search" data-global-search>
@@ -289,6 +293,19 @@ function buildFileTree() {
   return root;
 }
 
+function initializeCollapsedFolders() {
+  if (collapsedFoldersInitialized) return;
+  const tree = buildFileTree();
+  const walk = (node, depth = 0) => {
+    Object.values(node.folders).forEach((folder) => {
+      if (depth > 0) collapsedFolders.add(folder.key);
+      walk(folder, depth + 1);
+    });
+  };
+  walk(tree);
+  collapsedFoldersInitialized = true;
+}
+
 function renderFileTree(node, activeModule, depth = 0) {
   const folders = Object.values(node.folders)
     .sort((left, right) => left.name.localeCompare(right.name))
@@ -311,7 +328,7 @@ function renderFileTree(node, activeModule, depth = 0) {
       const label = module.fileName.replace(/\.lean$/, "");
       return `
         <a class="tree-file ${module.name === activeModule ? "active" : ""}" href="${routeHash("module", module.name)}" style="--indent:${8 + depth * 14}px">
-          <span class="tree-file-icon">lean</span>
+          <span class="tree-file-icon" aria-hidden="true">&forall;</span>
           <span class="tree-name">${escapeHtml(label)}</span>
         </a>
       `;
@@ -434,10 +451,32 @@ function moduleView() {
         </header>
         ${moduleDoc}
         <div class="definition-page">
-          ${groups.map(definitionSection).join("") || `<div class="empty-state">No basic definitions indexed for this file.</div>`}
+          ${groups.map((group) => definitionSection(group, module)).join("") || `<div class="empty-state">No basic definitions indexed for this file.</div>`}
         </div>
       </article>
     </main>
+  `;
+}
+
+function namespaceNotesForGroup(group, module) {
+  const notes = (module.namespaceDocs || []).filter((note) => note.namespace === group.namespace);
+  if (!notes.length) return "";
+  return `
+    <div class="namespace-note-list" aria-label="Namespace notes">
+      ${notes.map(namespaceNote).join("")}
+    </div>
+  `;
+}
+
+function namespaceNote(note) {
+  const body =
+    note.kind === "comment"
+      ? `<pre class="namespace-comment">${escapeHtml(note.text)}</pre>`
+      : `<div class="namespace-doc markdown">${markdown(note.text)}</div>`;
+  return `
+    <div class="namespace-note ${escapeHtml(note.kind)}">
+      ${body}
+    </div>
   `;
 }
 
@@ -493,10 +532,12 @@ function namespaceSectionTitle(baseNamespace, decl) {
   return namespace;
 }
 
-function definitionSection(group) {
+function definitionSection(group, module) {
+  const namespaceNotes = namespaceNotesForGroup(group, module);
   return `
     <section class="definition-section">
       <h2>${escapeHtml(group.title)}</h2>
+      ${namespaceNotes}
       <div class="definition-card-list">
         ${group.declarations.map(definitionCard).join("")}
       </div>
@@ -896,6 +937,8 @@ fetch(DATA_URL)
   })
   .then((payload) => {
     data = payload;
+    document.title = `${data.project.name} - Lean View`;
+    initializeCollapsedFolders();
     if (!window.location.hash) {
       const preferred = data.declarations["GraphQL.DataModel.FieldAccess"]
         ? "GraphQL.DataModel.FieldAccess"

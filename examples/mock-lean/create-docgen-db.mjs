@@ -68,7 +68,9 @@ function parseFile(filePath) {
   const imports = [];
   const declarations = [];
   const moduleDocs = [];
-  let namespace = name;
+  const namespaceStack = [];
+  const namespaceFrameLengths = [];
+  const currentNamespace = () => (namespaceStack.length ? namespaceStack.join(".") : name);
 
   for (let index = 0; index < lines.length; index += 1) {
     const stripped = lines[index].trim();
@@ -86,21 +88,24 @@ function parseFile(filePath) {
 
     const namespaceMatch = /^namespace\s+([A-Za-z0-9_'.]+)\s*$/.exec(stripped);
     if (namespaceMatch) {
-      namespace = namespaceMatch[1];
+      const segments = namespaceMatch[1].split(".");
+      namespaceStack.push(...segments);
+      namespaceFrameLengths.push(segments.length);
       continue;
     }
     if (/^end(?:\s+[A-Za-z0-9_'.]+)?\s*$/.test(stripped)) {
-      namespace = name;
+      const frameLength = namespaceFrameLengths.pop() || 0;
+      namespaceStack.splice(namespaceStack.length - frameLength, frameLength);
       continue;
     }
 
-    const declarationMatch = /^(?:partial\s+)?(class|def|inductive|structure|theorem)\s+([A-Za-z0-9_?!']+)/.exec(stripped);
+    const declarationMatch = /^(?:partial\s+)?(class|def|inductive|structure|theorem)\s+([A-Za-z0-9_?!'.]+)/.exec(stripped);
     if (!declarationMatch) continue;
     declarations.push({
       moduleName: name,
       position: index + 1,
       kind: kindByKeyword[declarationMatch[1]],
-      name: `${namespace}.${declarationMatch[2]}`,
+      name: `${currentNamespace()}.${declarationMatch[2]}`,
       line: index + 1,
     });
   }

@@ -47,6 +47,14 @@ export interface RelatedGroup {
   declarations: string[];
 }
 
+export interface NamespaceDoc {
+  namespace: string;
+  line: number;
+  placement: "before" | "after";
+  kind: "doc" | "comment";
+  text: string;
+}
+
 export function moduleNameToRelativePath(moduleName: string): string {
   return `${moduleName.replaceAll(".", "/")}.lean`;
 }
@@ -153,6 +161,154 @@ export function readSourceDocs(repoRoot: string, moduleName: string): { moduleDo
   return { moduleDocMarkdown: moduleDocs.join("\n\n") };
 }
 
+function readDocCommentForward(lines: string[], index: number): { text: string; endIndex: number } | null {
+  if (!lines[index]?.trim().startsWith("/--")) return null;
+  const docLines: string[] = [];
+  const [, after] = lines[index].split("/--", 2);
+  if (after.includes("-/")) {
+    return { text: cleanModuleDocBlock(after.split("-/", 1)[0]), endIndex: index };
+  }
+
+  docLines.push(after);
+  let cursor = index + 1;
+  while (cursor < lines.length) {
+    const line = lines[cursor];
+    if (line.includes("-/")) {
+      docLines.push(line.split("-/", 1)[0]);
+      break;
+    }
+    docLines.push(line);
+    cursor += 1;
+  }
+  return { text: cleanModuleDocBlock(docLines.join("\n")), endIndex: cursor };
+}
+
+function readLineCommentForward(lines: string[], index: number): { text: string; endIndex: number } | null {
+  if (!lines[index]?.trim().startsWith("--")) return null;
+  const commentLines: string[] = [];
+  let cursor = index;
+  while (cursor < lines.length) {
+    const stripped = lines[cursor].trim();
+    if (!stripped.startsWith("--") || stripped.startsWith("/-")) break;
+    commentLines.push(stripped.slice(2).trim());
+    cursor += 1;
+  }
+  return { text: commentLines.join("\n").trim(), endIndex: cursor - 1 };
+}
+
+function readCommentForward(
+  lines: string[],
+  index: number,
+): { kind: "doc" | "comment"; text: string; startIndex: number; endIndex: number } | null {
+  const lineComment = readLineCommentForward(lines, index);
+  if (lineComment) return { kind: "comment", startIndex: index, ...lineComment };
+  const docComment = readDocCommentForward(lines, index);
+  if (docComment) return { kind: "doc", startIndex: index, ...docComment };
+  return null;
+}
+
+function readCommentBackward(
+  lines: string[],
+  index: number,
+): { kind: "doc" | "comment"; text: string; startIndex: number; endIndex: number } | null {
+  const stripped = lines[index]?.trim() || "";
+  if (stripped.startsWith("--")) {
+    const commentLines: string[] = [];
+    let cursor = index;
+    while (cursor >= 0) {
+      const line = lines[cursor].trim();
+      if (!line.startsWith("--") || line.startsWith("/-")) break;
+      commentLines.push(line.slice(2).trim());
+      cursor -= 1;
+    }
+    return {
+      kind: "comment",
+      text: commentLines.reverse().join("\n").trim(),
+      startIndex: cursor + 1,
+      endIndex: index,
+    };
+  }
+
+  if (!stripped.includes("-/")) return null;
+  let cursor = index;
+  while (cursor >= 0 && !lines[cursor].includes("/--")) cursor -= 1;
+  if (cursor < 0) return null;
+  const forward = readDocCommentForward(lines, cursor);
+  if (!forward || forward.endIndex !== index) return null;
+  return {
+    kind: "doc",
+    text: forward.text,
+    startIndex: cursor,
+    endIndex: index,
+  };
+}
+
+function namespaceNameFromStack(stack: string[], namespaceName: string): string {
+  return [...stack, ...namespaceName.split(".")].join(".");
+}
+
+export function readNamespaceDocs(repoRoot: string, moduleName: string): NamespaceDoc[] {
+  const lines = readModuleLines(repoRoot, moduleName);
+  const docs: NamespaceDoc[] = [];
+  const namespaceStack: string[] = [];
+  const namespaceFrameLengths: number[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const stripped = lines[index].trim();
+    const namespaceMatch = /^namespace\s+([A-Za-z0-9_'.]+)\s*$/.exec(stripped);
+    if (namespaceMatch) {
+      const namespace = namespaceNameFromStack(namespaceStack, namespaceMatch[1]);
+      const beforeBlocks: Array<ReturnType<typeof readCommentBackward> & {}> = [];
+      let beforeIndex = index - 1;
+      while (beforeIndex >= 0) {
+        const block = readCommentBackward(lines, beforeIndex);
+        if (!block) break;
+        beforeBlocks.push(block);
+        beforeIndex = block.startIndex - 1;
+      }
+      beforeBlocks.reverse().forEach((block) => {
+        if (block?.text) {
+          docs.push({
+            namespace,
+            line: index + 1,
+            placement: "before",
+            kind: block.kind,
+            text: block.text,
+          });
+        }
+      });
+
+      let afterIndex = index + 1;
+      while (afterIndex < lines.length) {
+        const block = readCommentForward(lines, afterIndex);
+        if (!block) break;
+        if (block.text) {
+          docs.push({
+            namespace,
+            line: index + 1,
+            placement: "after",
+            kind: block.kind,
+            text: block.text,
+          });
+        }
+        afterIndex = block.endIndex + 1;
+      }
+
+      const frameLength = namespaceMatch[1].split(".").length;
+      namespaceStack.push(...namespaceMatch[1].split("."));
+      namespaceFrameLengths.push(frameLength);
+      continue;
+    }
+
+    if (/^end(?:\s+[A-Za-z0-9_'.]+)?\s*$/.test(stripped)) {
+      const frameLength = namespaceFrameLengths.pop() || 0;
+      namespaceStack.splice(namespaceStack.length - frameLength, frameLength);
+    }
+  }
+
+  return docs;
+}
+
 export function readSourceDocstring(
   repoRoot: string,
   moduleName: string,
@@ -230,15 +386,31 @@ function escapeRegExp(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
-function declarationLinePattern(name: string, kind: string): RegExp | null {
+const DECLARATION_MODIFIER_PATTERN = "(?:(?:private|protected|noncomputable|unsafe|partial)\\s+)*";
+
+function declarationSourceNames(name: string, moduleName: string): string[] {
+  const names = [name];
+  if (name.startsWith(`${moduleName}.`)) names.push(name.slice(moduleName.length + 1));
+  names.push(shortName(name));
+  return [...new Set(names)];
+}
+
+function declarationLinePattern(sourceName: string, kind: string): RegExp | null {
   const keyword = declarationKeyword(kind);
   if (!keyword) return null;
-  const localName = shortName(name);
-  return new RegExp(`^(\\s*)(?:partial\\s+)?${keyword}\\s+${escapeRegExp(localName)}(?=[\\s:{(\\[]|$)`);
+  return new RegExp(`^(\\s*)${DECLARATION_MODIFIER_PATTERN}${keyword}\\s+${escapeRegExp(sourceName)}(?=[\\s:{(\\[]|$)`);
 }
 
 function siblingDeclarationPattern(): RegExp {
-  return /^(\s*)(?:(?:partial\s+)?(?:abbrev|class|def|inductive|structure|theorem)\s+\S+|mutual\b)/;
+  return new RegExp(`^(\\s*)(?:${DECLARATION_MODIFIER_PATTERN}(?:abbrev|class|def|inductive|structure|theorem)\\s+\\S+|mutual\\b)`);
+}
+
+function siblingNamespacePattern(): RegExp {
+  return /^(\s*)namespace\s+\S+/;
+}
+
+function terminationByPattern(): RegExp {
+  return /^(\s*)termination_by\b/;
 }
 
 function trimSourceEnd(lines: string[], startIndex: number, endIndex: number): number {
@@ -255,6 +427,15 @@ function trimSourceEnd(lines: string[], startIndex: number, endIndex: number): n
   return endIndex;
 }
 
+function siblingDocstringStart(lines: string[], startIndex: number, siblingIndex: number): number {
+  let index = siblingIndex - 1;
+  while (index > startIndex && !lines[index].trim()) index -= 1;
+  if (index <= startIndex || !lines[index].includes("-/")) return siblingIndex;
+
+  while (index > startIndex && !lines[index].includes("/--")) index -= 1;
+  return lines[index]?.includes("/--") ? index : siblingIndex;
+}
+
 export function findDeclarationSource(
   repoRoot: string,
   moduleName: string,
@@ -262,13 +443,15 @@ export function findDeclarationSource(
   kind: string,
 ): SourceMatch | null {
   const lines = readModuleLines(repoRoot, moduleName);
-  const pattern = declarationLinePattern(name, kind);
-  if (!lines.length || pattern == null) return null;
+  const patterns = declarationSourceNames(name, moduleName)
+    .map((sourceName) => declarationLinePattern(sourceName, kind))
+    .filter((pattern): pattern is RegExp => pattern != null);
+  if (!lines.length || patterns.length === 0) return null;
 
   let startIndex: number | null = null;
   let startIndent = 0;
   for (let index = 0; index < lines.length; index += 1) {
-    const match = pattern.exec(lines[index]);
+    const match = patterns.map((pattern) => pattern.exec(lines[index])).find((result) => result != null);
     if (match) {
       startIndex = index;
       startIndent = match[1].length;
@@ -278,11 +461,23 @@ export function findDeclarationSource(
   if (startIndex == null) return null;
 
   const siblingPattern = siblingDeclarationPattern();
+  const namespacePattern = siblingNamespacePattern();
+  const terminationPattern = terminationByPattern();
   let endIndex = lines.length;
   for (let index = startIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
     const siblingMatch = siblingPattern.exec(line);
     if (siblingMatch && siblingMatch[1].length <= startIndent) {
+      endIndex = siblingDocstringStart(lines, startIndex, index);
+      break;
+    }
+    const namespaceMatch = namespacePattern.exec(line);
+    if (namespaceMatch && namespaceMatch[1].length <= startIndent) {
+      endIndex = siblingDocstringStart(lines, startIndex, index);
+      break;
+    }
+    const terminationMatch = terminationPattern.exec(line);
+    if (kind === "definition" && terminationMatch && terminationMatch[1].length <= startIndent) {
       endIndex = index;
       break;
     }
@@ -553,6 +748,7 @@ export function buildPayload(
       editorLink: editorLink(repoRoot, module.sourcePath, 1),
       docMarkdown,
       docText: markdownToText(docMarkdown),
+      namespaceDocs: readNamespaceDocs(repoRoot, module.name) as unknown as JsonValue,
       declarations: declarations
         .filter((declaration) => declaration.module === module.name)
         .map((declaration) => declaration.name),

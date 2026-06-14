@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 export interface ParsedCliArgs {
   docGen?: string;
@@ -16,17 +16,20 @@ export interface ParsedCliArgs {
 
 export interface ResolvedCliOptions {
   docGenPath: string;
+  docGenOutputDir: string;
+  docBuildDir: string;
+  generateDocGen: boolean;
   repoRoot: string;
   outDir: string;
   localRoot: string;
   projectName: string;
+  packageName: string;
   server: boolean;
   host: string;
   port: number;
   open: boolean;
 }
 
-const DEFAULT_LOCAL_ROOT = "GraphQL";
 const DEFAULT_HOST = "127.0.0.1";
 const DOC_GEN_CANDIDATES = [
   "api-docs.db",
@@ -36,6 +39,12 @@ const DOC_GEN_CANDIDATES = [
   "build/doc/DocGen4/api-docs.db",
   "build/doc/api-docs.db",
 ];
+const LAKEFILE_NAMES = ["lakefile.toml", "lakefile.lean"];
+
+export interface LakefileMetadata {
+  projectName?: string;
+  localRoot?: string;
+}
 
 function requireValue(args: string[], index: number, option: string): string {
   const value = args[index + 1];
@@ -103,15 +112,87 @@ export function resolveDocGenDb(input: string, cwd: string): string {
   return join(target, "api-docs.db");
 }
 
-export function resolveCliOptions(parsed: ParsedCliArgs, currentDirectory: string): ResolvedCliOptions {
-  const repoRoot = resolve(currentDirectory, parsed.repoRoot || ".");
-  const docGenInput = parsed.docGen || join(repoRoot, ".lean-view", "doc-gen");
+function unquoteLakeName(value: string): string {
+  return value
+    .trim()
+    .replace(/^«(.+)»$/, "$1")
+    .replace(/^"(.+)"$/, "$1");
+}
+
+function firstMatch(text: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    const value = match?.slice(1).find((capture) => capture != null && capture !== "");
+    if (value) return unquoteLakeName(value);
+  }
+  return undefined;
+}
+
+export function parseLakefileMetadata(text: string): LakefileMetadata {
   return {
-    docGenPath: resolveDocGenDb(docGenInput, currentDirectory),
+    projectName: firstMatch(text, [
+      /^\s*name\s*=\s*"([^"]+)"/m,
+      /^\s*package\s+(?:"([^"]+)"|«([^»]+)»|([A-Za-z0-9_'.-]+))/m,
+    ]),
+    localRoot: firstMatch(text, [
+      /^\s*\[\[lean_lib\]\][\s\S]*?^\s*name\s*=\s*"([^"]+)"/m,
+      /^\s*lean_lib\s+(?:"([^"]+)"|«([^»]+)»|([A-Za-z0-9_'.]+))/m,
+    ]),
+  };
+}
+
+function parentDirectory(path: string): string {
+  const parent = dirname(path);
+  return parent === path ? path : parent;
+}
+
+function directoryNameFallback(path: string): string {
+  return basename(path) || basename(resolve(path));
+}
+
+export function findLakefile(startDirectory: string): string | null {
+  let directory = resolve(startDirectory);
+  while (true) {
+    for (const fileName of LAKEFILE_NAMES) {
+      const candidate = join(directory, fileName);
+      if (existsSync(candidate)) return candidate;
+    }
+    const parent = parentDirectory(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
+function readLakefileMetadata(startDirectory: string): { root: string; metadata: LakefileMetadata } | null {
+  const lakefile = findLakefile(startDirectory);
+  if (!lakefile) return null;
+  return {
+    root: dirname(lakefile),
+    metadata: parseLakefileMetadata(readFileSync(lakefile, "utf8")),
+  };
+}
+
+export function resolveCliOptions(parsed: ParsedCliArgs, currentDirectory: string): ResolvedCliOptions {
+  const explicitRepoRoot = parsed.repoRoot
+    ? isAbsolute(parsed.repoRoot)
+      ? parsed.repoRoot
+      : resolve(currentDirectory, parsed.repoRoot)
+    : null;
+  const lake = readLakefileMetadata(explicitRepoRoot || currentDirectory);
+  const repoRoot = explicitRepoRoot || lake?.root || resolve(currentDirectory);
+  const defaultDocGenOutputDir = join(repoRoot, ".lean-view", "doc-gen");
+  const docGenInput = parsed.docGen || defaultDocGenOutputDir;
+  const docGenPath = resolveDocGenDb(docGenInput, currentDirectory);
+  return {
+    docGenPath,
+    docGenOutputDir: parsed.docGen ? dirname(docGenPath) : defaultDocGenOutputDir,
+    docBuildDir: join(repoRoot, ".lean-view", "docbuild"),
+    generateDocGen: parsed.docGen == null,
     repoRoot,
     outDir: parsed.out ? resolve(currentDirectory, parsed.out) : join(repoRoot, ".lean-view", "site"),
-    localRoot: parsed.localRoot || DEFAULT_LOCAL_ROOT,
-    projectName: parsed.projectName || basename(repoRoot),
+    localRoot: lake?.metadata.localRoot || parsed.localRoot || directoryNameFallback(repoRoot),
+    projectName: lake?.metadata.projectName || parsed.projectName || directoryNameFallback(repoRoot),
+    packageName: lake?.metadata.projectName || directoryNameFallback(repoRoot),
     server: parsed.server || parsed.open,
     host: parsed.host || DEFAULT_HOST,
     port: parsed.port,

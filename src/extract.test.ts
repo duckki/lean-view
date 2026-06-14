@@ -12,6 +12,7 @@ import {
   moduleNameToRelativePath,
   namespaceName,
   readLeadingLineComment,
+  readNamespaceDocs,
   readSourceDocs,
   readSourceDocstring,
   relatedGroups,
@@ -74,6 +75,162 @@ test("finds current source declaration and ignores generated projections", () =>
   });
 });
 
+test("matches declarations with dotted local names", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Schema", [
+      "namespace GraphQL.Schema",
+      "",
+      "structure ObjectType where",
+      "  fields : List String",
+      "",
+      "def ObjectType.isEmpty (objectType : ObjectType) : Bool :=",
+      "  objectType.fields.isEmpty",
+      "",
+      "end GraphQL.Schema",
+    ]);
+
+    const match = findDeclarationSource(
+      repoRoot,
+      "GraphQL.Schema",
+      "GraphQL.Schema.ObjectType.isEmpty",
+      "definition",
+    );
+
+    assert.ok(match);
+    if (!match) throw new Error("expected declaration source match");
+    assert.equal(
+      match.source,
+      "def ObjectType.isEmpty (objectType : ObjectType) : Bool :=\n  objectType.fields.isEmpty",
+    );
+  });
+});
+
+test("stops declaration source before the next declaration docstring", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Schema", [
+      "namespace GraphQL.Schema",
+      "",
+      "/-- A field on an object. -/",
+      "structure Field where",
+      "  name : String",
+      "  deriving Repr",
+      "",
+      "/-- An object with fields. -/",
+      "structure ObjectType where",
+      "  fields : List Field",
+      "  deriving Repr",
+      "",
+      "end GraphQL.Schema",
+    ]);
+
+    const match = findDeclarationSource(repoRoot, "GraphQL.Schema", "GraphQL.Schema.Field", "structure");
+
+    assert.ok(match);
+    if (!match) throw new Error("expected declaration source match");
+    assert.equal(match.source, "structure Field where\n  name : String\n  deriving Repr");
+  });
+});
+
+test("stops declaration source before private theorem siblings", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Example", [
+      "namespace GraphQL.Example",
+      "",
+      "def visible : Nat :=",
+      "  1",
+      "",
+      "private theorem helper : visible = 1 := by",
+      "  rfl",
+      "",
+      "def after : Nat :=",
+      "  2",
+      "",
+      "end GraphQL.Example",
+    ]);
+
+    const visible = findDeclarationSource(
+      repoRoot,
+      "GraphQL.Example",
+      "GraphQL.Example.visible",
+      "definition",
+    );
+    const helper = findDeclarationSource(
+      repoRoot,
+      "GraphQL.Example",
+      "GraphQL.Example.helper",
+      "theorem",
+    );
+
+    assert.ok(visible);
+    assert.ok(helper);
+    if (!visible || !helper) throw new Error("expected declaration source matches");
+    assert.equal(visible.source, "def visible : Nat :=\n  1");
+    assert.equal(helper.source, "private theorem helper : visible = 1 := by\n  rfl");
+  });
+});
+
+test("stops declaration source before a following namespace block", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Example", [
+      "namespace GraphQL.Example",
+      "",
+      "def beforeNamespace : Nat :=",
+      "  1",
+      "",
+      "-----------------------------------------------------------------------------------------",
+      "-- Separate helper namespace.",
+      "-----------------------------------------------------------------------------------------",
+      "",
+      "namespace Helpers",
+      "def helper : Nat :=",
+      "  2",
+      "end Helpers",
+      "",
+      "end GraphQL.Example",
+    ]);
+
+    const match = findDeclarationSource(
+      repoRoot,
+      "GraphQL.Example",
+      "GraphQL.Example.beforeNamespace",
+      "definition",
+    );
+
+    assert.ok(match);
+    if (!match) throw new Error("expected declaration source match");
+    assert.equal(match.source, "def beforeNamespace : Nat :=\n  1");
+  });
+});
+
+test("cuts definition source before termination_by", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Example", [
+      "namespace GraphQL.Example",
+      "",
+      "def recursive : Nat -> Nat",
+      "  | 0 => 0",
+      "  | n + 1 => recursive n",
+      "termination_by n => n",
+      "",
+      "def after : Nat :=",
+      "  2",
+      "",
+      "end GraphQL.Example",
+    ]);
+
+    const match = findDeclarationSource(
+      repoRoot,
+      "GraphQL.Example",
+      "GraphQL.Example.recursive",
+      "definition",
+    );
+
+    assert.ok(match);
+    if (!match) throw new Error("expected declaration source match");
+    assert.equal(match.source, "def recursive : Nat -> Nat\n  | 0 => 0\n  | n + 1 => recursive n");
+  });
+});
+
 test("extracts module docs, declaration docstrings, and line comments from source", () => {
   withTempRepo((repoRoot) => {
     writeModule(repoRoot, "GraphQL.Example", [
@@ -105,6 +262,100 @@ test("extracts module docs, declaration docstrings, and line comments from sourc
       "Declaration overview.\n\n- First point.",
     );
     assert.equal(readLeadingLineComment(repoRoot, "GraphQL.Example", 18), "Ordinary line comment.");
+  });
+});
+
+test("extracts doc and plain comments around sibling and nested namespaces", () => {
+  withTempRepo((repoRoot) => {
+    writeModule(repoRoot, "GraphQL.Schema", [
+      "/-! Module overview. -/",
+      "",
+      "-- Plain comment before schema namespace.",
+      "-- Second plain line.",
+      "/-- Doc comment before schema namespace. -/",
+      "namespace GraphQL.Schema",
+      "-- Plain comment after schema namespace.",
+      "/--",
+      "Doc comment after schema namespace.",
+      "Second doc line.",
+      "-/",
+      "",
+      "structure Field where",
+      "  name : String",
+      "",
+      "-- Plain comment before nested namespace.",
+      "namespace Validation",
+      "/-- Nested namespace doc after the declaration line. -/",
+      "def ok : Bool := true",
+      "end Validation",
+      "",
+      "/-- Sibling namespace doc before the declaration line. -/",
+      "namespace Rendering",
+      "-- Plain comment after sibling namespace.",
+      "def label : String := \"field\"",
+      "end Rendering",
+      "",
+      "end GraphQL.Schema",
+    ]);
+
+    assert.deepEqual(readNamespaceDocs(repoRoot, "GraphQL.Schema"), [
+      {
+        namespace: "GraphQL.Schema",
+        line: 6,
+        placement: "before",
+        kind: "comment",
+        text: "Plain comment before schema namespace.\nSecond plain line.",
+      },
+      {
+        namespace: "GraphQL.Schema",
+        line: 6,
+        placement: "before",
+        kind: "doc",
+        text: "Doc comment before schema namespace.",
+      },
+      {
+        namespace: "GraphQL.Schema",
+        line: 6,
+        placement: "after",
+        kind: "comment",
+        text: "Plain comment after schema namespace.",
+      },
+      {
+        namespace: "GraphQL.Schema",
+        line: 6,
+        placement: "after",
+        kind: "doc",
+        text: "Doc comment after schema namespace.\nSecond doc line.",
+      },
+      {
+        namespace: "GraphQL.Schema.Validation",
+        line: 17,
+        placement: "before",
+        kind: "comment",
+        text: "Plain comment before nested namespace.",
+      },
+      {
+        namespace: "GraphQL.Schema.Validation",
+        line: 17,
+        placement: "after",
+        kind: "doc",
+        text: "Nested namespace doc after the declaration line.",
+      },
+      {
+        namespace: "GraphQL.Schema.Rendering",
+        line: 23,
+        placement: "before",
+        kind: "doc",
+        text: "Sibling namespace doc before the declaration line.",
+      },
+      {
+        namespace: "GraphQL.Schema.Rendering",
+        line: 23,
+        placement: "after",
+        kind: "comment",
+        text: "Plain comment after sibling namespace.",
+      },
+    ]);
   });
 });
 

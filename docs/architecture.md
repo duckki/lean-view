@@ -24,6 +24,8 @@ static browser directory
 - `src/cli.ts`: command-line entry point used by `npx lean-view`.
 - `src/cli-options.ts`: command-line option parsing and doc-gen database path
   resolution.
+- `src/doc-gen.ts`: project-local Lean module discovery and doc-gen4 command
+  orchestration when the CLI needs to generate its own database.
 - `src/server.ts`: optional Node.js static file server used by `--server` and
   `--open`.
 - `src/site.ts`: static site generation orchestration.
@@ -49,8 +51,9 @@ or displaying all of Mathlib, Std, Lean, or Lake.
 
 After reading the database, Lean View reopens local source files under
 `--repo-root` to recover source snippets, module docs, declaration doc strings,
-and ordinary leading comments. Source snippets are used for the main definition
-cards because they preserve the form the developer expects to read.
+ordinary leading comments, and namespace-adjacent comments. Source snippets are
+used for the main definition cards because they preserve the form the developer
+expects to read.
 
 ## Static Data Contract
 
@@ -63,13 +66,42 @@ The CLI writes `data/index.json` with:
 - related-theorem groups,
 - a module import graph.
 
+Each module record can include `namespaceDocs`, a source-order array of comments
+found directly before or after `namespace` lines. Entries include the namespace,
+line, placement (`before` or `after`), kind (`doc` or `comment`), and text.
+
 The frontend is intentionally static and fetches only `data/index.json`.
 
 ## CLI Path Conventions
 
+At startup the CLI looks for `lakefile.toml` or `lakefile.lean` in the current
+directory or an ancestor directory. When found, that directory becomes the
+default repo root. Lean View derives the display project name from the Lake
+package name and the local root from the first `lean_lib` declaration. The
+`--project-name` and `--local-root` options are fallback values when Lake
+metadata cannot be found or parsed. If no `lean_lib` is available and no
+fallback option is supplied, the local root falls back to the Lake directory name
+or, without a Lake file, the current directory name.
+
 `--doc-gen` accepts a path to `api-docs.db`, a directory containing
 `api-docs.db`, or common docbuild/doc-gen output directories containing the
-database. When omitted, Lean View looks under `.lean-view/doc-gen/api-docs.db`.
+database. When omitted, Lean View generates project-only doc-gen output under
+`.lean-view/doc-gen` and then reads `.lean-view/doc-gen/api-docs.db`.
+
+Implicit doc-gen generation scans `.lean` files under `--local-root` and orders
+parent modules before child modules. It runs `lake build` in the target project,
+then writes `.lean-view/docbuild/lakefile.toml` with dependencies on
+`doc-gen4` and the target Lake package. The generated docbuild workspace also
+copies the target project's `lean-toolchain` and pins `doc-gen4` to the matching
+Lean version tag when the toolchain uses the standard `leanprover/lean4:<version>`
+form. If that value changes, Lean View clears generated docbuild build artifacts
+while preserving fetched packages so Lake cannot reuse `.olean` files built with
+an incompatible Lean version. The docbuild workspace runs `lake update`, builds
+the executable with `lake build doc-gen4`, then invokes `lake env doc-gen4
+single --build <doc-gen-dir> <module> api-docs.db <source-uri>` for each
+discovered project module. It finishes with `lake env doc-gen4 fromDb --build
+<doc-gen-dir> <db> <local-root>` from the docbuild workspace so the doc-gen
+output directory is populated alongside the database.
 
 `--out` controls the generated static site directory. When omitted, Lean View
 writes to `.lean-view/site`.
@@ -88,14 +120,17 @@ The frontend is a dependency-free browser application in `static/app.js` and
 - `#/search?...` for full-screen declaration search,
 - `#/graph` for the import graph.
 
-The module route is the main workflow. It renders a file explorer, definition
-cards, and a contextual right pane without requiring additional network calls.
+The module route is the main workflow. It renders a file explorer, namespace
+notes, definition cards, and a contextual right pane without requiring
+additional network calls. Namespace doc comments render as markdown; plain
+namespace comments render in monospace.
 
 ## Mock Fixture
 
 The repository no longer depends on a private `tests/graphql-lean` submodule.
 `examples/mock-lean/` contains a sizable synthetic Lean source tree with many
-files, imports, namespaces, structures, inductives, definitions, and theorems.
+files, imports, sibling and nested namespaces, namespace comments, variable
+length doc strings, structures, inductives, definitions, and theorems.
 `examples/mock-lean/create-docgen-db.mjs` creates a deterministic SQLite
 database with the subset of doc-gen tables consumed by the extractor.
 
@@ -104,7 +139,9 @@ database with the subset of doc-gen tables consumed by the extractor.
 The npm package publishes compiled JavaScript under `dist/`, static frontend
 assets under `static/`, and documentation under `docs/`. The package has no
 runtime npm dependencies; Node.js and a system `sqlite3` executable are the
-runtime requirements.
+runtime requirements. Implicit doc-gen generation also requires a Lake project
+and network access the first time the generated docbuild workspace fetches
+`doc-gen4`.
 
 `npm pack` runs the build and test suite through the `prepack` script so the
 published tarball contains compiled CLI files and verified frontend assets.
