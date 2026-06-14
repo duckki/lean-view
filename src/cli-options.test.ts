@@ -5,6 +5,7 @@ import { test } from "node:test";
 
 import {
   findLakefile,
+  formatResolvedCliOptionsSummary,
   parseLakefileMetadata,
   parseCliArgs,
   resolveCliOptions,
@@ -67,7 +68,9 @@ test("defaults doc-gen and out paths under .lean-view", () => {
   assert.equal(resolved.docGenPath, "/CurrentProject/.lean-view/doc-gen/api-docs.db");
   assert.equal(resolved.docGenOutputDir, "/CurrentProject/.lean-view/doc-gen");
   assert.equal(resolved.docBuildDir, "/CurrentProject/.lean-view/docbuild");
+  assert.equal(resolved.docGenInput, "/CurrentProject/.lean-view/doc-gen");
   assert.equal(resolved.generateDocGen, true);
+  assert.equal(resolved.lakefileFound, false);
   assert.equal(resolved.outDir, "/CurrentProject/.lean-view/site");
   assert.equal(resolved.host, "127.0.0.1");
   assert.equal(resolved.port, 0);
@@ -171,4 +174,69 @@ test("resolves doc-gen file, database directory, and docbuild directory inputs",
 
     assert.equal(resolveDocGenDb("missing-dir", root), resolve(root, "missing-dir", "api-docs.db"));
   });
+});
+
+test("formats a compact CLI summary with relative paths inside the repo", () => {
+  const summary = formatResolvedCliOptionsSummary({
+    docGenPath: "/repo/.lean-view/doc-gen/api-docs.db",
+    docGenOutputDir: "/repo/.lean-view/doc-gen",
+    docBuildDir: "/repo/.lean-view/docbuild",
+    docGenInput: "/repo/.lean-view/doc-gen",
+    generateDocGen: true,
+    lakefileFound: true,
+    repoRoot: "/repo",
+    outDir: "/repo/.lean-view/site",
+    localRoot: "GraphQL",
+    projectName: "graphql-lean",
+    packageName: "graphql-lean",
+    server: true,
+    host: "127.0.0.1",
+    port: 0,
+    open: false,
+  });
+
+  assert.equal(summary, [
+    "Repository root: /repo",
+    "  - Lakefile found",
+    "  - Project name: graphql-lean",
+    "  - Local root module: GraphQL",
+    "doc-gen not provided -> doc-gen to be generated",
+    "  - doc-gen directory: .lean-view/doc-gen",
+    "  - doc-gen database: .lean-view/doc-gen/api-docs.db",
+    "Output: .lean-view/site",
+    "  - Server: enabled on 127.0.0.1:0",
+    "",
+  ].join("\n"));
+});
+
+test("formats explicit doc-gen input as provided when it is outside the repo", () => {
+  const summary = formatResolvedCliOptionsSummary({
+    docGenPath: "/workspace/.lean-view/doc-gen/api-docs.db",
+    docGenOutputDir: "/workspace/.lean-view/doc-gen",
+    docBuildDir: "/repo/.lean-view/docbuild",
+    docGenInput: ".lean-view/doc-gen",
+    generateDocGen: false,
+    lakefileFound: false,
+    repoRoot: "/repo",
+    outDir: "/tmp/lean-view-output",
+    localRoot: "MockProject",
+    projectName: "Mock Lean",
+    packageName: "repo",
+    server: false,
+    host: "127.0.0.1",
+    port: 0,
+    open: false,
+  });
+
+  assert.equal(summary, [
+    "Repository root: /repo",
+    "  - Lakefile not found",
+    "  - Project name: Mock Lean",
+    "  - Local root module: MockProject",
+    "doc-gen provided -> existing doc-gen database to be used",
+    "  - doc-gen database: .lean-view/doc-gen",
+    "Output: /tmp/lean-view-output",
+    "  - Server: disabled",
+    "",
+  ].join("\n"));
 });

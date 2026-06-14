@@ -20,8 +20,12 @@ npx lean-view --open
 
 - Node.js 20 or newer.
 - `sqlite3` on `PATH`.
-- Lake and network access to fetch `doc-gen4` when `--doc-gen` is not supplied.
-- Or, an existing doc-gen4 SQLite database for the project.
+- `lake` on `PATH` when `--doc-gen` is not supplied. A normal Lean 4
+  installation through `elan` includes Lake.
+- Network access to fetch `doc-gen4` the first time implicit doc-gen generation
+  runs.
+- Or, an existing doc-gen4 SQLite database for the project, supplied through
+  `--doc-gen`.
 
 When no doc-gen database is supplied, `lean-view` creates a generated
 `.lean-view/docbuild` Lake workspace that depends on `doc-gen4` and the target

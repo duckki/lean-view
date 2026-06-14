@@ -19,6 +19,7 @@
     "dist/site.js",
     "static",
     "examples",
+    "!examples/**/.lean-view",
     "README.md",
     "docs"
   ],

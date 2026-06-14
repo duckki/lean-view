@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export interface ParsedCliArgs {
   docGen?: string;
@@ -18,7 +18,9 @@ export interface ResolvedCliOptions {
   docGenPath: string;
   docGenOutputDir: string;
   docBuildDir: string;
+  docGenInput: string;
   generateDocGen: boolean;
+  lakefileFound: boolean;
   repoRoot: string;
   outDir: string;
   localRoot: string;
@@ -187,7 +189,9 @@ export function resolveCliOptions(parsed: ParsedCliArgs, currentDirectory: strin
     docGenPath,
     docGenOutputDir: parsed.docGen ? dirname(docGenPath) : defaultDocGenOutputDir,
     docBuildDir: join(repoRoot, ".lean-view", "docbuild"),
+    docGenInput,
     generateDocGen: parsed.docGen == null,
+    lakefileFound: lake != null,
     repoRoot,
     outDir: parsed.out ? resolve(currentDirectory, parsed.out) : join(repoRoot, ".lean-view", "site"),
     localRoot: lake?.metadata.localRoot || parsed.localRoot || directoryNameFallback(repoRoot),
@@ -198,4 +202,40 @@ export function resolveCliOptions(parsed: ParsedCliArgs, currentDirectory: strin
     port: parsed.port,
     open: parsed.open,
   };
+}
+
+export function formatResolvedCliOptionsSummary(options: ResolvedCliOptions): string {
+  const displayPath = (path: string, originalInput?: string): string => {
+    if (originalInput && !isAbsolute(originalInput)) {
+      const resolvedOriginal = resolve(originalInput);
+      const relativeOriginal = relative(options.repoRoot, resolvedOriginal);
+      if (relativeOriginal.startsWith("..") || isAbsolute(relativeOriginal)) return originalInput;
+    }
+
+    const relativePath = relative(options.repoRoot, path);
+    if (relativePath === "") return ".";
+    if (relativePath.startsWith("..") || isAbsolute(relativePath)) return path;
+    return relativePath;
+  };
+  const serverValue = options.server ? `enabled on ${options.host}:${options.port}` : "disabled";
+  const lines = [
+    `Repository root: ${options.repoRoot}`,
+    `  - Lakefile ${options.lakefileFound ? "found" : "not found"}`,
+    `  - Project name: ${options.projectName}`,
+    `  - Local root module: ${options.localRoot}`,
+    options.generateDocGen ? "doc-gen not provided -> doc-gen to be generated" : "doc-gen provided -> existing doc-gen database to be used",
+  ];
+
+  if (options.generateDocGen) {
+    lines.push(
+      `  - doc-gen directory: ${displayPath(options.docGenOutputDir)}`,
+      `  - doc-gen database: ${displayPath(options.docGenPath)}`,
+    );
+  } else {
+    lines.push(`  - doc-gen database: ${displayPath(options.docGenPath, options.docGenInput)}`);
+  }
+
+  lines.push(`Output: ${displayPath(options.outDir)}`, `  - Server: ${serverValue}`);
+
+  return `${lines.join("\n")}\n`;
 }

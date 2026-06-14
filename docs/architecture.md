@@ -139,9 +139,10 @@ database with the subset of doc-gen tables consumed by the extractor.
 The npm package publishes compiled JavaScript under `dist/`, static frontend
 assets under `static/`, and documentation under `docs/`. The package has no
 runtime npm dependencies; Node.js and a system `sqlite3` executable are the
-runtime requirements. Implicit doc-gen generation also requires a Lake project
-and network access the first time the generated docbuild workspace fetches
-`doc-gen4`.
+runtime requirements when reading an existing doc-gen database. Implicit doc-gen
+generation also requires `lake` on `PATH`, a Lake project, and network access
+the first time the generated docbuild workspace fetches `doc-gen4`. A normal
+Lean 4 installation through `elan` includes Lake.
 
 `npm pack` runs the build and test suite through the `prepack` script so the
 published tarball contains compiled CLI files and verified frontend assets.

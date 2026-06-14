@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { argv, cwd, exit, stderr, stdout } from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { parseCliArgs, resolveCliOptions } from "./cli-options.js";
+import { formatResolvedCliOptionsSummary, parseCliArgs, resolveCliOptions } from "./cli-options.js";
 import { runDocGen } from "./doc-gen.js";
 import { createStaticServer, openUrl } from "./server.js";
 import { generateSite } from "./site.js";
@@ -40,9 +40,9 @@ export async function main(args = argv.slice(2)): Promise<number> {
 
   const options = resolveCliOptions(parsed, cwd());
   const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+  stdout.write(formatResolvedCliOptionsSummary(options));
 
   if (options.generateDocGen) {
-    stdout.write(`Generating doc-gen database at ${options.docGenPath}\n`);
     runDocGen({
       repoRoot: options.repoRoot,
       docBuildDir: options.docBuildDir,
