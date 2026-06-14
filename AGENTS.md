@@ -37,6 +37,8 @@ self-contained static site.
   workflow; search and graph are full-screen workflows.
 - `docs/architecture.md`: package layout, data flow, static data contract, and
   publishing notes.
+- `docs/release-workflow.md`: version-driven npm/GitHub release process,
+  required secrets, verification commands, and re-run behavior.
 - `examples/mock-lean/`: checked-in synthetic Lean project for demos and tests.
   Its `create-docgen-db.mjs` script generates the doc-gen-like SQLite fixture
   consumed by integration-style tests.
@@ -83,6 +85,7 @@ self-contained static site.
   `node --test dist/*.test.js`.
 - Build-only check: `npm run build`.
 - Publish packaging check: `npm pack`; the `prepack` script runs the test suite.
+  Prefer `npm pack --dry-run` for routine verification so no `.tgz` is written.
 - Current tests cover extractor/source helpers, namespace-adjacent comment
   extraction, implicit doc-gen command planning, CLI option/path resolution,
   static server path handling, mock fixture database generation, graph
