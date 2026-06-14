@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Static declaration browser for Lean projects using doc-gen4 data.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duckki/lean-view.git"
+  },
   "bin": {
     "lean-view": "dist/cli.js"
   },

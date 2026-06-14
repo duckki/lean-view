@@ -89,3 +89,13 @@ npm pack
 
 The package intentionally has no runtime npm dependencies. The extractor shells
 out to `sqlite3 -json` so it can stay small and easy to run through `npx`.
+
+## Publishing
+
+Publishing is handled by `.github/workflows/publish-npm.yml` when a GitHub
+Release is published, or when the workflow is run manually from GitHub Actions.
+Add an npm automation token as the repository secret `NPM_TOKEN` before running
+the workflow.
+
+The workflow installs dependencies, runs the test suite, and publishes with npm
+provenance enabled.
