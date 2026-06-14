@@ -186,7 +186,7 @@ function progressMessage(command: DocGenCommand, docGenAnnounced: boolean, proje
 export function runDocGen(options: RunDocGenOptions): void {
   const modules = discoverLeanModules(options.repoRoot, options.localRoot);
   if (modules.length === 0) {
-    throw new Error(`No Lean modules found for local root ${options.localRoot}`);
+    throw new Error(`No Lean modules found for root module ${options.localRoot}`);
   }
 
   mkdirSync(options.outDir, { recursive: true });

@@ -2,16 +2,19 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export interface ParsedCliArgs {
+  command?: "doctor";
   docGen?: string;
   out?: string;
   repoRoot?: string;
-  localRoot?: string;
+  rootModule?: string;
   projectName?: string;
   server: boolean;
   host?: string;
   port: number;
   open: boolean;
   help: boolean;
+  dryRun: boolean;
+  json: boolean;
 }
 
 export interface ResolvedCliOptions {
@@ -23,13 +26,15 @@ export interface ResolvedCliOptions {
   lakefileFound: boolean;
   repoRoot: string;
   outDir: string;
-  localRoot: string;
+  rootModule: string;
   projectName: string;
   packageName: string;
   server: boolean;
   host: string;
   port: number;
   open: boolean;
+  dryRun: boolean;
+  json: boolean;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -45,7 +50,7 @@ const LAKEFILE_NAMES = ["lakefile.toml", "lakefile.lean"];
 
 export interface LakefileMetadata {
   projectName?: string;
-  localRoot?: string;
+  rootModule?: string;
 }
 
 function requireValue(args: string[], index: number, option: string): string {
@@ -68,10 +73,16 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     port: 0,
     open: false,
     help: false,
+    dryRun: false,
+    json: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (index === 0 && arg === "doctor") {
+      parsed.command = "doctor";
+      continue;
+    }
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
       continue;
@@ -85,13 +96,21 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       parsed.server = true;
       continue;
     }
+    if (arg === "--dry-run") {
+      parsed.dryRun = true;
+      continue;
+    }
+    if (arg === "--json") {
+      parsed.json = true;
+      continue;
+    }
     if (!arg.startsWith("--")) throw new Error(`Unexpected positional argument: ${arg}`);
 
     const value = requireValue(args, index, arg);
-    if (arg === "--doc-gen" || arg === "--db") parsed.docGen = value;
+    if (arg === "--doc-gen") parsed.docGen = value;
     else if (arg === "--out") parsed.out = value;
     else if (arg === "--repo-root") parsed.repoRoot = value;
-    else if (arg === "--local-root") parsed.localRoot = value;
+    else if (arg === "--root-module") parsed.rootModule = value;
     else if (arg === "--project-name") parsed.projectName = value;
     else if (arg === "--host") parsed.host = value;
     else if (arg === "--port") parsed.port = parsePort(value);
@@ -136,7 +155,7 @@ export function parseLakefileMetadata(text: string): LakefileMetadata {
       /^\s*name\s*=\s*"([^"]+)"/m,
       /^\s*package\s+(?:"([^"]+)"|«([^»]+)»|([A-Za-z0-9_'.-]+))/m,
     ]),
-    localRoot: firstMatch(text, [
+    rootModule: firstMatch(text, [
       /^\s*\[\[lean_lib\]\][\s\S]*?^\s*name\s*=\s*"([^"]+)"/m,
       /^\s*lean_lib\s+(?:"([^"]+)"|«([^»]+)»|([A-Za-z0-9_'.]+))/m,
     ]),
@@ -194,13 +213,15 @@ export function resolveCliOptions(parsed: ParsedCliArgs, currentDirectory: strin
     lakefileFound: lake != null,
     repoRoot,
     outDir: parsed.out ? resolve(currentDirectory, parsed.out) : join(repoRoot, ".lean-view", "site"),
-    localRoot: lake?.metadata.localRoot || parsed.localRoot || directoryNameFallback(repoRoot),
+    rootModule: lake?.metadata.rootModule || parsed.rootModule || directoryNameFallback(repoRoot),
     projectName: lake?.metadata.projectName || parsed.projectName || directoryNameFallback(repoRoot),
     packageName: lake?.metadata.projectName || directoryNameFallback(repoRoot),
     server: parsed.server || parsed.open,
     host: parsed.host || DEFAULT_HOST,
     port: parsed.port,
     open: parsed.open,
+    dryRun: parsed.dryRun,
+    json: parsed.json,
   };
 }
 
@@ -222,7 +243,7 @@ export function formatResolvedCliOptionsSummary(options: ResolvedCliOptions): st
     `Repository root: ${options.repoRoot}`,
     `  - Lakefile ${options.lakefileFound ? "found" : "not found"}`,
     `  - Project name: ${options.projectName}`,
-    `  - Local root module: ${options.localRoot}`,
+    `  - Root module: ${options.rootModule}`,
     options.generateDocGen ? "doc-gen not provided -> doc-gen to be generated" : "doc-gen provided -> existing doc-gen database to be used",
   ];
 

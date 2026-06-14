@@ -3,6 +3,7 @@ declare module "node:assert/strict" {
     equal(actual: unknown, expected: unknown, message?: string): void;
     deepEqual(actual: unknown, expected: unknown, message?: string): void;
     ok(value: unknown, message?: string): void;
+    throws(fn: () => unknown, expected?: RegExp, message?: string): void;
   };
   export default assert;
 }
@@ -104,6 +105,7 @@ declare module "node:process" {
   export const platform: string;
   export const stderr: { write(message: string): void };
   export const stdout: { write(message: string): void };
+  export const version: string;
 }
 
 declare module "node:test" {

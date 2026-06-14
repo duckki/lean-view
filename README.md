@@ -38,7 +38,7 @@ Common options:
 - `--doc-gen <path>`: existing doc-gen output directory, database directory,
   docbuild directory, or path to `api-docs.db`. When omitted, `lean-view` runs
   project-only doc-gen generation under `.lean-view/doc-gen`.
-- `--local-root <module>`: local module namespace to include, such as
+- `--root-module <module>`: root module namespace to include, such as
   `MyProject`. If a Lake file can be parsed, the first `lean_lib` name is
   used. If no `lean_lib` is found, this option is used as a fallback, then the
   Lake directory name, then the current directory name.
@@ -54,8 +54,20 @@ Common options:
 - `--port <port>`: server port. Defaults to `0`, which asks the OS for a random
   available port.
 - `--open`: open the served site in the system browser. Implies `--server`.
+- `--dry-run`: print resolved options and planned doc-gen commands without
+  building doc-gen or writing the static site.
+- `--json`: print machine-readable JSON. With `--server`, the JSON includes
+  `serverUrl`.
 
-When `--doc-gen` is omitted, `lean-view` discovers modules under `--local-root`,
+Use `lean-view doctor` to check the resolved project, Lake metadata, `sqlite3`,
+`lake`, and doc-gen database availability:
+
+```sh
+npx lean-view doctor
+npx lean-view doctor --json
+```
+
+When `--doc-gen` is omitted, `lean-view` discovers modules under `--root-module`,
 runs `lake build` in the target project, writes
 `.lean-view/docbuild/lakefile.toml`, runs `lake update` in that docbuild
 workspace, builds the executable with `lake build doc-gen4`, then runs
@@ -77,7 +89,7 @@ node examples/mock-lean/create-docgen-db.mjs .lean-view/doc-gen/api-docs.db
 npm run build
 node dist/cli.js \
   --repo-root examples/mock-lean \
-  --local-root MockProject \
+  --root-module MockProject \
   --doc-gen .lean-view/doc-gen \
   --project-name "Mock Lean" \
   --server
@@ -88,7 +100,7 @@ node dist/cli.js \
 ```sh
 npm install
 npm test
-npm pack
+npm pack --dry-run
 ```
 
 The package intentionally has no runtime npm dependencies. The extractor shells

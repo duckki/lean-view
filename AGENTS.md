@@ -18,11 +18,11 @@ self-contained static site.
 - `src/cli-options.ts`: CLI parsing and doc-gen database path resolution.
   It also discovers `lakefile.toml` / `lakefile.lean` in the current directory
   or ancestors, derives the repo root, package display name, and first
-  `lean_lib` local root, and treats `--project-name` / `--local-root` as
+  `lean_lib` root module, and treats `--project-name` / `--root-module` as
   fallbacks.
 - `src/doc-gen.ts`: module discovery plus the `lake build` / `doc-gen4 single`
-  / `doc-gen4 fromDb` command sequence used when no `--doc-gen` or `--db` input
-  is supplied. It writes a generated `.lean-view/docbuild/lakefile.toml` that
+  / `doc-gen4 fromDb` command sequence used when no `--doc-gen` input is
+  supplied. It writes a generated `.lean-view/docbuild/lakefile.toml` that
   depends on `doc-gen4` and the target Lake package, then runs `doc-gen4` from
   that docbuild workspace. The docbuild workspace must copy the target
   project's `lean-toolchain` and pin `doc-gen4` to the matching Lean version tag
@@ -49,19 +49,21 @@ self-contained static site.
   project-only doc-gen4 `api-docs.db`.
 - The package intentionally has no runtime npm dependencies. TypeScript is a
   development dependency only.
-- CLI inputs are `--doc-gen`, `--local-root`, optional `--repo-root`, optional
+- CLI inputs are `--doc-gen`, `--root-module`, optional `--repo-root`, optional
   `--project-name`, optional `--out`, optional `--server`, optional `--host`,
-  optional `--port`, and optional `--open`. `--db` remains a compatibility alias
-  for `--doc-gen`.
+  optional `--port`, optional `--open`, optional `--dry-run`, and optional
+  `--json`.
+- The CLI also supports the read-only `lean-view doctor` command for checking
+  resolved project metadata and prerequisites.
 - Default generated paths live under `.lean-view/`: `.lean-view/doc-gen` for
   doc-gen database lookup and `.lean-view/site` for static HTML output.
-- By default, `repoRoot`, `projectName`, and `localRoot` come from the nearest
-  ancestor Lake file. User-supplied `--project-name` and `--local-root` only
+- By default, `repoRoot`, `projectName`, and root module come from the nearest
+  ancestor Lake file. User-supplied `--project-name` and `--root-module` only
   fill gaps when that metadata is absent or unparsable. If no `lean_lib` is
-  parsed and no fallback option is supplied, `localRoot` falls back to the Lake
+  parsed and no fallback option is supplied, the root module falls back to the Lake
   directory name, then the current directory name.
-- If neither `--doc-gen` nor `--db` is supplied, the CLI runs project-only
-  doc-gen generation before writing the static site. That path assumes `lake` is
+- If `--doc-gen` is not supplied, the CLI runs project-only doc-gen generation
+  before writing the static site. That path assumes `lake` is
   available and may need network access to fetch `doc-gen4` into the generated
   docbuild workspace. The generated docbuild workspace mirrors the target
   project's `lean-toolchain` to avoid incompatible `.olean` headers.

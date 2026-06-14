@@ -811,10 +811,10 @@ function parseArgs(args: string[]): Record<string, string> {
 export function main(args = argv.slice(2)): number {
   const parsed = parseArgs(args);
   const repoRoot = resolve(parsed["repo-root"] || cwd());
-  const docGenPath = resolveDocGenDb(parsed["doc-gen"] || parsed.db || ".lean-view/doc-gen", cwd());
+  const docGenPath = resolveDocGenDb(parsed["doc-gen"] || ".lean-view/doc-gen", cwd());
   const outPath = resolve(parsed.out || ".lean-view/data/index.json");
   const payload = buildPayload(docGenPath, repoRoot, {
-    localRoot: parsed["local-root"] || DEFAULT_LOCAL_ROOT,
+    localRoot: parsed["root-module"] || DEFAULT_LOCAL_ROOT,
     projectName: parsed["project-name"] || DEFAULT_PROJECT_NAME,
   });
   writePayload(payload, outPath);

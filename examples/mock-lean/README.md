@@ -15,5 +15,5 @@ Then generate and serve the browser:
 
 ```sh
 npm run build
-node dist/cli.js --repo-root examples/mock-lean --local-root MockProject --doc-gen .lean-view/doc-gen --server
+node dist/cli.js --repo-root examples/mock-lean --root-module MockProject --doc-gen .lean-view/doc-gen --server
 ```

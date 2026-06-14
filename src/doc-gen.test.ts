@@ -20,7 +20,7 @@ function writeModule(root: string, relativePath: string): void {
   writeFileSync(path, "namespace MockProject\n\ndef marker : Nat := 0\n\nend MockProject\n", "utf8");
 }
 
-test("discovers Lean modules under the requested local root", () => {
+test("discovers Lean modules under the requested root module", () => {
   withTempRepo((root) => {
     writeModule(root, "MockProject.lean");
     writeModule(root, "MockProject/Core.lean");

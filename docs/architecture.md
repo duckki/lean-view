@@ -46,7 +46,7 @@ The extractor shells out to `sqlite3 -json` and reads doc-gen4 tables for:
 - module docs,
 - declaration attributes.
 
-The extractor filters modules to `--local-root` so a project can avoid generating
+The extractor filters modules to `--root-module` so a project can avoid generating
 or displaying all of Mathlib, Std, Lean, or Lake.
 
 After reading the database, Lean View reopens local source files under
@@ -77,10 +77,10 @@ The frontend is intentionally static and fetches only `data/index.json`.
 At startup the CLI looks for `lakefile.toml` or `lakefile.lean` in the current
 directory or an ancestor directory. When found, that directory becomes the
 default repo root. Lean View derives the display project name from the Lake
-package name and the local root from the first `lean_lib` declaration. The
-`--project-name` and `--local-root` options are fallback values when Lake
+package name and the root module from the first `lean_lib` declaration. The
+`--project-name` and `--root-module` options are fallback values when Lake
 metadata cannot be found or parsed. If no `lean_lib` is available and no
-fallback option is supplied, the local root falls back to the Lake directory name
+fallback option is supplied, the root module falls back to the Lake directory name
 or, without a Lake file, the current directory name.
 
 `--doc-gen` accepts a path to `api-docs.db`, a directory containing
@@ -88,7 +88,7 @@ or, without a Lake file, the current directory name.
 database. When omitted, Lean View generates project-only doc-gen output under
 `.lean-view/doc-gen` and then reads `.lean-view/doc-gen/api-docs.db`.
 
-Implicit doc-gen generation scans `.lean` files under `--local-root` and orders
+Implicit doc-gen generation scans `.lean` files under `--root-module` and orders
 parent modules before child modules. It runs `lake build` in the target project,
 then writes `.lean-view/docbuild/lakefile.toml` with dependencies on
 `doc-gen4` and the target Lake package. The generated docbuild workspace also
@@ -100,7 +100,7 @@ an incompatible Lean version. The docbuild workspace runs `lake update`, builds
 the executable with `lake build doc-gen4`, then invokes `lake env doc-gen4
 single --build <doc-gen-dir> <module> api-docs.db <source-uri>` for each
 discovered project module. It finishes with `lake env doc-gen4 fromDb --build
-<doc-gen-dir> <db> <local-root>` from the docbuild workspace so the doc-gen
+<doc-gen-dir> <db> <root-module>` from the docbuild workspace so the doc-gen
 output directory is populated alongside the database.
 
 `--out` controls the generated static site directory. When omitted, Lean View
@@ -109,6 +109,20 @@ writes to `.lean-view/site`.
 `--server` starts the built-in Node.js static server for the generated site.
 `--port 0` is the default and asks the OS for a random available port. `--open`
 implies `--server` and opens the generated URL with the system browser.
+
+`lean-view doctor` is read-only. It resolves the same project metadata as a
+normal run, checks Node, `sqlite3`, `lake` when implicit doc-gen generation is
+planned, Lake metadata discovery, and the explicit doc-gen database when one is
+provided.
+
+`--dry-run` is also read-only. It prints the resolved paths and, when implicit
+doc-gen generation is planned, the Lake/doc-gen command sequence without
+building doc-gen or writing the static site.
+
+`--json` switches CLI result output to machine-readable JSON. With `--server`,
+the JSON result includes the selected `serverUrl`; during implicit doc-gen
+generation, command output is routed away from stdout so stdout remains
+parseable JSON.
 
 ## Frontend
 
